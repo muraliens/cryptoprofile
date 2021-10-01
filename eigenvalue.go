@@ -6,6 +6,8 @@ import (
 	"math"
 	"os"
 	"strconv"
+
+	"github.com/jinzhu/gorm"
 )
 
 const maxString string = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -21,12 +23,24 @@ type KeyStream struct {
 	BitLength int
 }
 
-type EigenValue int
-type EigenProfile []EigenValue
+type EigenValue byte
+type EigenProfile []byte
 
 type EigenProfileType struct {
 	Profile EigenProfile
 	Count   int
+}
+
+type ProfileModel struct {
+	gorm.Model
+	EigenProfile
+}
+
+type DBModel struct {
+	gorm.Model
+	BitLength int    `gorm:"column:BitLength"`
+	Profile   []byte `gorm:"column:Profile;size:500"`
+	Count     int    `gorm:"column:Count"`
 }
 
 type EigenProfiles struct {
@@ -56,6 +70,40 @@ func GenRandBitStream(bitlength int) BitStream {
 	var str string
 	for _, data := range randData {
 		str = str + fmt.Sprintf("%08b", data)
+	}
+
+	return BitStream{
+		Value:  str[:bitlength],
+		Length: bitlength,
+	}
+}
+
+func ParseUInt32(bitlength int, streams []uint32) BitStream {
+
+	if len(streams)*32 < bitlength {
+		return BitStream{}
+	}
+
+	var str string
+	for _, stream := range streams {
+		str = str + fmt.Sprintf("%032b", stream)
+	}
+
+	return BitStream{
+		Value:  str[:bitlength],
+		Length: bitlength,
+	}
+}
+
+func ParseBytes(bitlength int, streams []byte) BitStream {
+
+	if len(streams)*8 < bitlength {
+		return BitStream{}
+	}
+
+	var str string
+	for _, stream := range streams {
+		str = str + fmt.Sprintf("%08b", stream)
 	}
 
 	return BitStream{
@@ -141,13 +189,15 @@ func (bs BitStream) EigenVaule() EigenValue {
 }
 
 func (bs BitStream) EigenProfile() EigenProfile {
-	evp := make([]EigenValue, 0)
+
+	var evp EigenProfile
+	//	evp := make([]EigenValue, 0)
 	bss := bs.AllPrefixes()
 	for _, pbs := range bss {
 		ev := pbs.EigenVaule()
-		evp = append(evp, ev)
+		evp = append(evp, byte(ev))
 	}
-	return evp
+	return EigenProfile(evp)
 }
 
 func isEigenProfileMatch(ev1 EigenProfile, ev2 EigenProfile) bool {
@@ -248,6 +298,129 @@ func GetEigenProfiles(bitLength int, rs BitStream) *EigenProfiles {
 	}
 	fmt.Printf("\r")
 	return evps
+}
+
+func GetEigenProfilesFromDB(db *gorm.DB, bitLength int) *EigenProfiles {
+
+	var model []DBModel
+	err := db.Where("BitLength=?", bitLength).Find(&model).Error
+	if err != nil {
+		return nil
+	}
+	if len(model) == 0 {
+		return nil
+	}
+	evps := &EigenProfiles{
+		Profiles: make([]EigenProfileType, 0),
+	}
+	for i := range model {
+		// var profile EigenProfile
+		// profile = model[i].Profile
+		// // for _, ev := range model[i].Profile {
+		// // 	profile = append(profile, ev)
+		// }
+		evps.Profiles = append(evps.Profiles, EigenProfileType{Profile: model[i].Profile, Count: model[i].Count})
+	}
+	return evps
+}
+
+func StoreEigenProfilesToDB(db *gorm.DB, bitLength int, evps *EigenProfiles) error {
+
+	if evps == nil {
+		return fmt.Errorf("invalid profiles")
+	}
+
+	for _, profile := range evps.Profiles {
+		// var temp []int
+		// for _, ev := range profile.Profile {
+		// 	temp = append(temp, int(ev))
+		// }
+		model := DBModel{
+			BitLength: bitLength,
+			Profile:   profile.Profile,
+			Count:     profile.Count,
+		}
+		err := db.Create(&model).Error
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func PrintEigenProfiles(filename string, crypto string, key []byte, iv []byte, evps *EigenProfiles, evpsr *EigenProfiles) {
+	total := 0
+	for i := 0; i < len(evps.Profiles); i++ {
+		total = total + evps.Profiles[i].Count
+	}
+	totalr := 0
+	for i := 0; i < len(evpsr.Profiles); i++ {
+		totalr = totalr + evpsr.Profiles[i].Count
+	}
+
+	fmt.Printf("Orginal Total Profiles : %d\n", len(evps.Profiles))
+	f, err := os.Create(filename)
+	if err != nil {
+		fmt.Printf("Failed to create file")
+		return
+	}
+	defer f.Close()
+	str := fmt.Sprintf("Orginal Total Profiles     : %d\n", len(evps.Profiles))
+	f.WriteString(str)
+	if crypto == "" {
+		str = fmt.Sprintf("Rand Total Profiles : %d\n", len(evpsr.Profiles))
+		f.WriteString(str)
+	} else {
+		str = fmt.Sprintf("%s Total Profiles : %d\n", crypto, len(evpsr.Profiles))
+		f.WriteString(str)
+		if len(key) > 0 {
+			temp := ParseBytes(len(key)*8, key)
+			str = fmt.Sprintf("Key : %s\n", temp.Value)
+			f.WriteString(str)
+		}
+		if len(iv) > 0 {
+			temp := ParseBytes(len(iv)*8, iv)
+			str = fmt.Sprintf("IV : %s\n", temp.Value)
+			f.WriteString(str)
+		}
+
+	}
+
+	f.WriteString("\n\n")
+	for i := 0; i < len(evps.Profiles); i++ {
+
+		str := fmt.Sprintf("Profile - %d\n", i+1)
+		f.WriteString("--------------------------\n")
+		f.WriteString(str)
+		f.WriteString("--------------------------\n")
+		str = fmt.Sprintf("%v\n", evps.Profiles[i].Profile)
+		f.WriteString(str)
+		str = fmt.Sprintf("Number of Occurrence (Original) : %d\n", evps.Profiles[i].Count)
+		f.WriteString(str)
+		str = fmt.Sprintf("Ratio of Occurrence (Original)  : %0.06f\n", float64(evps.Profiles[i].Count)/float64(total))
+		f.WriteString(str)
+		found := false
+		index := 0
+		for j := range evpsr.Profiles {
+			if isEigenProfileMatch(evpsr.Profiles[j].Profile, evps.Profiles[i].Profile) {
+				found = true
+				index = j
+				break
+			}
+		}
+
+		if found {
+			str = fmt.Sprintf("Number of Occurrence (Rand)     : %d\n", evpsr.Profiles[index].Count)
+			f.WriteString(str)
+			str = fmt.Sprintf("Ratio of Occurrence (Rand)      : %0.06f\n\n\n", float64(evpsr.Profiles[index].Count)/float64(totalr))
+			f.WriteString(str)
+		} else {
+			str = fmt.Sprintf("Number of Occurrence (Rand)     : Missing\n")
+			f.WriteString(str)
+			str = fmt.Sprintf("Ratio of Occurrence (Rand)      : Missing\n\n")
+			f.WriteString(str)
+		}
+	}
 }
 
 // func (ks KeyStream) EigenProfile() EigenProfile {
