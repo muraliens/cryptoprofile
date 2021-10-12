@@ -28,3 +28,11 @@ func TestVocabulary(t *testing.T) {
 	fmt.Printf("Total Profiles : %d\n", len(evps.Profiles))
 
 }
+
+func TestConvertion(t *testing.T) {
+	res, err := BitStreamToBytes("011010101001101010100110101010")
+	if err != nil {
+		t.Fatalf("Failed to convert %v", err)
+	}
+	fmt.Printf("%x", res)
+}

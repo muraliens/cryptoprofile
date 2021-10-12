@@ -124,6 +124,28 @@ func ParseBitStream(stream string) (BitStream, error) {
 	}, nil
 }
 
+func BitStreamToBytes(stream string) ([]byte, error) {
+	result := make([]byte, 0)
+	str := stream
+	for {
+		l := 0
+		if len(str) > 8 {
+			l = len(str) - 8
+		}
+		temp, err := strconv.ParseInt(str[l:], 2, 64)
+		if err != nil {
+			return nil, err
+		}
+		result = append([]byte{byte(temp)}, result...)
+		if l == 0 {
+			break
+		} else {
+			str = str[:l]
+		}
+	}
+	return result, nil
+}
+
 func isTupleExist(bss []BitStream, tup string) bool {
 	for i := range bss {
 		if bss[i].Value == tup {
@@ -200,7 +222,7 @@ func (bs BitStream) EigenProfile() EigenProfile {
 	return EigenProfile(evp)
 }
 
-func isEigenProfileMatch(ev1 EigenProfile, ev2 EigenProfile) bool {
+func IsEigenProfileMatch(ev1 EigenProfile, ev2 EigenProfile) bool {
 	if len(ev1) != len(ev2) {
 		return false
 	}
@@ -218,7 +240,7 @@ func (evps *EigenProfiles) AddEigenProfile(evp EigenProfile) {
 		return
 	}
 	for i := range evps.Profiles {
-		if isEigenProfileMatch(evps.Profiles[i].Profile, evp) {
+		if IsEigenProfileMatch(evps.Profiles[i].Profile, evp) {
 			evps.Profiles[i].Count++
 			return
 		}
@@ -348,7 +370,7 @@ func StoreEigenProfilesToDB(db *gorm.DB, bitLength int, evps *EigenProfiles) err
 	return nil
 }
 
-func PrintEigenProfiles(filename string, crypto string, key []byte, iv []byte, evps *EigenProfiles, evpsr *EigenProfiles) {
+func PrintEigenProfiles(filename string, crypto string, key []byte, iv []byte, rs BitStream, evps *EigenProfiles, evpsr *EigenProfiles) {
 	total := 0
 	for i := 0; i < len(evps.Profiles); i++ {
 		total = total + evps.Profiles[i].Count
@@ -368,10 +390,10 @@ func PrintEigenProfiles(filename string, crypto string, key []byte, iv []byte, e
 	str := fmt.Sprintf("Orginal Total Profiles     : %d\n", len(evps.Profiles))
 	f.WriteString(str)
 	if crypto == "" {
-		str = fmt.Sprintf("Rand Total Profiles : %d\n", len(evpsr.Profiles))
+		str = fmt.Sprintf("Rand Total Profiles         : %d\n", len(evpsr.Profiles))
 		f.WriteString(str)
 	} else {
-		str = fmt.Sprintf("%s Total Profiles : %d\n", crypto, len(evpsr.Profiles))
+		str = fmt.Sprintf("%s Total Profiles           : %d\n", crypto, len(evpsr.Profiles))
 		f.WriteString(str)
 		if len(key) > 0 {
 			temp := ParseBytes(len(key)*8, key)
@@ -380,10 +402,14 @@ func PrintEigenProfiles(filename string, crypto string, key []byte, iv []byte, e
 		}
 		if len(iv) > 0 {
 			temp := ParseBytes(len(iv)*8, iv)
-			str = fmt.Sprintf("IV : %s\n", temp.Value)
+			str = fmt.Sprintf("IV  : %s\n", temp.Value)
 			f.WriteString(str)
 		}
-
+		// fmt.Printf("RS : %v\n", rs)
+		// if rs.Length > 0 {
+		// 	str = fmt.Sprintf("Keystream  : %s\n", rs.Value)
+		// 	f.WriteString(str)
+		// }
 	}
 
 	f.WriteString("\n\n")
@@ -402,7 +428,7 @@ func PrintEigenProfiles(filename string, crypto string, key []byte, iv []byte, e
 		found := false
 		index := 0
 		for j := range evpsr.Profiles {
-			if isEigenProfileMatch(evpsr.Profiles[j].Profile, evps.Profiles[i].Profile) {
+			if IsEigenProfileMatch(evpsr.Profiles[j].Profile, evps.Profiles[i].Profile) {
 				found = true
 				index = j
 				break

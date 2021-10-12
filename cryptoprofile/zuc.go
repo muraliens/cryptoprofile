@@ -7,7 +7,7 @@ import (
 	"github.com/muraliens/cryptoprofile"
 )
 
-func (h *Handle) ZucStream(bitlength int) cryptoprofile.BitStream {
+func (h *Handle) ZucStream() cryptoprofile.BitStream {
 	if len(h.key) == 0 {
 		h.key = make([]byte, 16)
 		rand.Read(h.key)
@@ -19,13 +19,13 @@ func (h *Handle) ZucStream(bitlength int) cryptoprofile.BitStream {
 
 	z := zuc.NewZUC(h.key, h.iv)
 
-	numberStream := h.streamLength / 4
+	numberStream := h.streamLength / 32
 
-	if numberStream*4 != h.streamLength {
+	if numberStream*32 != h.streamLength {
 		numberStream++
 	}
 
 	streams := z.GenerateKeystream(uint32(numberStream))
 
-	return cryptoprofile.ParseUInt32(bitlength, streams)
+	return cryptoprofile.ParseUInt32(h.streamLength, streams)
 }
