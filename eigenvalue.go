@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/jinzhu/gorm"
+	"github.com/xuri/excelize"
 )
 
 const maxString string = "0000000000000000000000000000000000000000000000000000000000000000"
@@ -294,9 +295,9 @@ func GetAllEigenProfiles(bitLength int) *EigenProfiles {
 		evps.AddEigenProfile(evp)
 		// fmt.Println(evp)
 		// fmt.Printf("EVP : %ld\n", len(evp))
-		fmt.Printf("\r%d%%", int((i*100)/totalLength))
+		fmt.Printf("\rGenerating All Profiles : %d%% ", int((i*100)/totalLength))
 	}
-	fmt.Printf("\r")
+	fmt.Printf("\rGenerating All Profiles : 100%%\nAll Profiles Generation Completed\n")
 	return evps
 }
 
@@ -316,9 +317,9 @@ func GetEigenProfiles(bitLength int, rs BitStream) *EigenProfiles {
 		evps.AddEigenProfile(evp)
 		// fmt.Println(evp)
 		// fmt.Printf("EVP : %ld\n", len(evp))
-		fmt.Printf("\r%d%%", int((i*100)/(rs.Length-(bitLength-1))))
+		fmt.Printf("\rGenerating Profiles : %d%% ", int((i*100)/(rs.Length-(bitLength-1))))
 	}
-	fmt.Printf("\r")
+	fmt.Printf("\rGenerating Profiles : 100%%\nProfiles Generation Completed\n")
 	return evps
 }
 
@@ -351,7 +352,8 @@ func StoreEigenProfilesToDB(db *gorm.DB, bitLength int, evps *EigenProfiles) err
 	if evps == nil {
 		return fmt.Errorf("invalid profiles")
 	}
-
+	count := 0
+	total := len(evps.Profiles)
 	for _, profile := range evps.Profiles {
 		// var temp []int
 		// for _, ev := range profile.Profile {
@@ -366,7 +368,10 @@ func StoreEigenProfilesToDB(db *gorm.DB, bitLength int, evps *EigenProfiles) err
 		if err != nil {
 			return err
 		}
+		count++
+		fmt.Printf("\rStoring Profiles : %d%% ", int((count*100)/(total)))
 	}
+	fmt.Printf("\rStoring Profiles : 100%%\nStoring Profiles Completed\n")
 	return nil
 }
 
@@ -380,7 +385,6 @@ func PrintEigenProfiles(filename string, crypto string, key []byte, iv []byte, r
 		totalr = totalr + evpsr.Profiles[i].Count
 	}
 
-	fmt.Printf("Orginal Total Profiles : %d\n", len(evps.Profiles))
 	f, err := os.Create(filename)
 	if err != nil {
 		fmt.Printf("Failed to create file")
@@ -447,6 +451,178 @@ func PrintEigenProfiles(filename string, crypto string, key []byte, iv []byte, r
 			f.WriteString(str)
 		}
 	}
+}
+
+func UpdateEigenProfiles(crypto string, bitLength int, key []byte, iv []byte, rs BitStream, evps *EigenProfiles, evpsr *EigenProfiles) (difference int) {
+	difference = 0
+	f, err := excelize.OpenFile("eigenprofiles.xlsx")
+	if err != nil {
+		f = excelize.NewFile()
+		f.SaveAs("eigenprofiles.xlsx")
+		f, err = excelize.OpenFile("eigenprofiles.xlsx")
+		if err != nil {
+			fmt.Printf("Failed to open excel sheet")
+			return
+		}
+	}
+	rows, err := f.Rows(crypto)
+	if err != nil {
+		_, err := f.Rows("Sheet1")
+		if err != nil {
+			f.NewSheet(crypto)
+		} else {
+			f.SetSheetName("Sheet1", crypto)
+		}
+		style, err := f.NewStyle(`{"alignment":{"horizontal":"center","vertical":"center","ident":1,"justify_last_line":true,"reading_order":0,"relative_indent":1,"wrap_text":true},"font":{"bold":true}}`)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		err = f.SetCellStyle(crypto, "A1", "E1", style)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		f.SetColWidth(crypto, "A", "D", 20)
+		f.SetColWidth(crypto, "E", "E", 45)
+		f.SetCellValue(crypto, "A1", "Template Length")
+		f.SetCellValue(crypto, "B1", "Total Expected Number of Profiles")
+		f.SetCellValue(crypto, "C1", "Total Observed Number of Profiles")
+		f.SetCellValue(crypto, "D1", "Difference")
+		f.SetCellValue(crypto, "E1", "Missing Profiles")
+		f.Save()
+		rows, err = f.Rows(crypto)
+		if err != nil {
+			fmt.Printf("Failed to open sheet")
+			return
+		}
+	}
+	count := 1
+	for rows.Next() {
+		count++
+	}
+	missingProfiles := make([]EigenProfileType, 0)
+	for i := 0; i < len(evps.Profiles); i++ {
+		found := false
+		for j := range evpsr.Profiles {
+			if IsEigenProfileMatch(evpsr.Profiles[j].Profile, evps.Profiles[i].Profile) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			difference++
+			missingProfiles = append(missingProfiles, evps.Profiles[i])
+		}
+	}
+	if difference > 0 {
+		fmt.Printf("Number of Missing profiles : %d\n", difference)
+		col := fmt.Sprintf("A%d", count)
+		ecol := fmt.Sprintf("E%d", count)
+		style, err := f.NewStyle(`{"alignment":{"horizontal":"center","vertical":"center","ident":1,"justify_last_line":true,"reading_order":0,"relative_indent":1,"wrap_text":true}}`)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		err = f.SetCellStyle(crypto, col, ecol, style)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		str := fmt.Sprintf("%d", bitLength)
+		f.SetCellValue(crypto, col, str)
+		col = fmt.Sprintf("B%d", count)
+		str = fmt.Sprintf("%d", len(evps.Profiles))
+		f.SetCellValue(crypto, col, str)
+		col = fmt.Sprintf("C%d", count)
+		str = fmt.Sprintf("%d", len(evpsr.Profiles))
+		f.SetCellValue(crypto, col, str)
+		col = fmt.Sprintf("D%d", count)
+		str = fmt.Sprintf("%d", difference)
+		f.SetCellValue(crypto, col, str)
+		col = fmt.Sprintf("E%d", count)
+		str = ""
+		for i := range missingProfiles {
+			if i != 0 {
+				str = str + "\n"
+			}
+			str = str + fmt.Sprintf("%v", missingProfiles[i].Profile)
+		}
+		f.SetCellValue(crypto, col, str)
+
+		f.Save()
+	} else {
+		fmt.Printf("No Missing Profile\n")
+	}
+	return difference
+}
+
+func UpdatePValue(crypto string, bitLength int, pvalue float64, missingProfile int) {
+	f, err := excelize.OpenFile("chisquare.xlsx")
+	if err != nil {
+		f = excelize.NewFile()
+		f.SaveAs("chisquare.xlsx")
+		f, err = excelize.OpenFile("chisquare.xlsx")
+		if err != nil {
+			fmt.Printf("Failed to open excel sheet")
+			return
+		}
+	}
+	rows, err := f.Rows(crypto)
+	if err != nil {
+		_, err := f.Rows("Sheet1")
+		if err != nil {
+			f.NewSheet(crypto)
+		} else {
+			f.SetSheetName("Sheet1", crypto)
+		}
+		style, err := f.NewStyle(`{"alignment":{"horizontal":"center","vertical":"center","ident":1,"justify_last_line":true,"reading_order":0,"relative_indent":1,"wrap_text":true},"font":{"bold":true}}`)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		err = f.SetCellStyle(crypto, "A1", "C1", style)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		f.SetColWidth(crypto, "A", "C", 20)
+		f.SetCellValue(crypto, "A1", "Template Length")
+		f.SetCellValue(crypto, "B1", "P-Value")
+		f.SetCellValue(crypto, "C1", "Missing Profile")
+		f.Save()
+		rows, err = f.Rows(crypto)
+		if err != nil {
+			fmt.Printf("Failed to open sheet")
+			return
+		}
+	}
+	count := 1
+	for rows.Next() {
+		count++
+	}
+
+	col := fmt.Sprintf("A%d", count)
+	ecol := fmt.Sprintf("C%d", count)
+	style, err := f.NewStyle(`{"alignment":{"horizontal":"center","vertical":"center","ident":1,"justify_last_line":true,"reading_order":0,"relative_indent":1,"wrap_text":true}}`)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	err = f.SetCellStyle(crypto, col, ecol, style)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	str := fmt.Sprintf("%d", bitLength)
+	f.SetCellValue(crypto, col, str)
+	col = fmt.Sprintf("B%d", count)
+	str = fmt.Sprintf("%15.06f", pvalue)
+	f.SetCellValue(crypto, col, str)
+	col = fmt.Sprintf("C%d", count)
+	str = fmt.Sprintf("%d", missingProfile)
+	f.SetCellValue(crypto, col, str)
+	f.Save()
 }
 
 // func (ks KeyStream) EigenProfile() EigenProfile {

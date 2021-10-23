@@ -159,8 +159,8 @@ long double approx_log_gamma(double N)
 
 double chisqr(int Dof, double Cv)
 {
-   // printf("Dof:  %i\n", Dof);
-  //  printf("Cv:  %f\n", Cv);
+    // printf("Dof:  %i\n", Dof);
+    // printf("Cv:  %f\n", Cv);
     if(Cv < 0 || Dof < 1)
     {
         return 0.0;
@@ -175,9 +175,9 @@ double chisqr(int Dof, double Cv)
     long double ln_PV;
     ln_PV = log_igf(K, X);
 
-    Gam = approx_gamma(K);
+    //Gam = approx_gamma(K);
     //Gam = lgammal(K);
-    //Gam = log_gamma(K);
+    Gam = log_gamma(K);
 
     ln_PV -= Gam;
     PValue = 1.0 - expl(ln_PV);
@@ -203,11 +203,11 @@ func ChiSqr(dv int, cv float64) float64 {
 	return float64(p)
 }
 
-func ChiSquareTest(filename string, crypto string, key []byte, iv []byte, rs cryptoprofile.BitStream, evps *cryptoprofile.EigenProfiles, evpsr *cryptoprofile.EigenProfiles) {
+func ChiSquareTest(filename string, crypto string, key []byte, iv []byte, rs cryptoprofile.BitStream, evps *cryptoprofile.EigenProfiles, evpsr *cryptoprofile.EigenProfiles) float64 {
 	f, err := os.Create(filename)
 	if err != nil {
 		fmt.Printf("Failed to create file")
-		return
+		return 0
 	}
 	defer f.Close()
 	E := make([]float64, len(evps.Profiles))
@@ -248,6 +248,10 @@ func ChiSquareTest(filename string, crypto string, key []byte, iv []byte, rs cry
 	str := fmt.Sprintf("                                                Ch^2 Sum    %15.06f\n", CHS)
 	f.WriteString(str)
 	f.WriteString("-----------------------------------------------------------------------------\n")
-	str = fmt.Sprintf("\np-Value =   %15.06f\n", ChiSqr(len(evps.Profiles)-1, CHS))
+	pvalue := ChiSqr(len(evps.Profiles)-1, CHS)
+	str = fmt.Sprintf("\np-Value =   %15.06f\n", pvalue)
 	f.WriteString(str)
+	f.Close()
+	fmt.Printf("P-Value =   %15.06f\n", pvalue)
+	return pvalue
 }
