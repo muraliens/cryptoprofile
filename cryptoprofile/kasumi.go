@@ -14,23 +14,16 @@ void Kasumi( u8 *data );
 void f8( u8 *key,int count,int bearer,int dir,u8 *data,int length );
 
 #define ROL16(a,b) (u16)((a<<b)|(a>>(16-b)))
+#define SWAP32(X) \
+    (((X >> 24) & 0xFF) | ((X >> 8) & 0xFF00) | ((X << 8) & 0xFF0000) | ((X << 24) & 0xFF000000))
 
-typedef union {
-	u32 b32;
-	u16 b16[2];
+typedef struct {
 	u8 b8[4];
 } DWORD;
 
-typedef union {
-	u16 b16;
+typedef struct {
 	u8 b8[2];
 } WORD;
-
-typedef union {
-	u32 b32[2];
-	u16 b16[4];
-	u8 b8[8];
-} REGISTER64;
 
 static u16 KLi1[8], KLi2[8];
 static u16 KOi1[8], KOi2[8], KOi3[8];
@@ -155,11 +148,14 @@ void Kasumi( u8 *data )
 		temp = FL( temp, n++ );
 		left ^= temp;
 	}while( n<=7 );
-
-	d[0].b8[0] = (u8)(left>>24); d[1].b8[0] = (u8)(right>>24);
-	d[0].b8[1] = (u8)(left>>16); d[1].b8[1] = (u8)(right>>16);
-	d[0].b8[2] = (u8)(left>>8); d[1].b8[2] = (u8)(right>>8);
-	d[0].b8[3] = (u8)(left); d[1].b8[3] = (u8)(right);
+	d[0].b8[0] = (u8)(left>>24);
+    d[1].b8[0] = (u8)(right>>24);
+	d[0].b8[1] = (u8)(left>>16);
+    d[1].b8[1] = (u8)(right>>16);
+	d[0].b8[2] = (u8)(left>>8);
+    d[1].b8[2] = (u8)(right>>8);
+	d[0].b8[3] = (u8)(left);
+    d[1].b8[3] = (u8)(right);
 }
 
 void KeySchedule( u8 *k )
@@ -193,13 +189,19 @@ void KeySchedule( u8 *k )
 void kasumi_ctr (u8 *key, u8 *iv, int length, u8 *keystream)
 {
 	int offset = 0;
-	u8 ivctr[8];
+	int round = 1;
+	u32 cnt;
+	u8 *ivctr;
 	u32 *counter = (u32 *)(iv + 4);
 	*counter = 0;
+    ivctr = (u8*)malloc(8);
 	KeySchedule(key);
 	while (length > 0)
 	{
 		memcpy(ivctr, iv, 8);
+		// printf("Round : %d, IV : ", round++);
+		// for (int i=0;i<8;++i) printf("%02X",iv[i]);
+        // printf("\n");
 		Kasumi(ivctr);
 		if (length > 8)
 		{
@@ -209,11 +211,17 @@ void kasumi_ctr (u8 *key, u8 *iv, int length, u8 *keystream)
 		{
 			memcpy(keystream+offset, ivctr, length);
 		}
-		*counter = *counter + 1;
+		cnt = *counter;
+		cnt = SWAP32(cnt);
+		cnt++;
+		cnt= SWAP32(cnt);
+		*counter = cnt;
 		offset = offset + 8;
 		length = length - 8;
 	}
+    free(ivctr);
 }
+
 
 */
 import (
