@@ -160,6 +160,10 @@ func main() {
 				h.iv = iv
 				h.key = key
 				rs = h.GrainStream()
+			case "sm4":
+				h.iv = iv
+				h.key = key
+				rs = h.SM4Stream()
 			default:
 				fmt.Printf("Crypto algorithm not supported")
 				return
