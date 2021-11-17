@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/jinzhu/gorm"
-	"github.com/xuri/excelize"
+	"github.com/xuri/excelize/v2"
 )
 
 const maxString string = "0000000000000000000000000000000000000000000000000000000000000000"

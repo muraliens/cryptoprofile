@@ -22,6 +22,7 @@ type Handle struct {
 	iv           []byte
 	numSamples   int
 	numRounds    int
+	onlyStream   bool
 }
 
 func main() {
@@ -43,6 +44,7 @@ func main() {
 	flag.StringVar(&keyBytes, "keyBytes", "", "Key byte stream")
 	flag.StringVar(&ivBytes, "ivBytes", "", "IV byte stream")
 	flag.IntVar(&h.numRounds, "numRounds", 0, "Number of Crypto Init Rounds")
+	flag.BoolVar(&h.onlyStream, "onlyStream", false, "Generate only stream")
 
 	flag.Parse()
 
@@ -168,13 +170,15 @@ func main() {
 				fmt.Printf("Crypto algorithm not supported")
 				return
 			}
-
-			evpsr := cryptoprofile.GetEigenProfiles(bitLength, rs)
-
-			cryptoprofile.PrintEigenProfiles(fmt.Sprintf("Profile%s_%d_%d.txt", h.crypto, bitLength, i+1), h.crypto, h.key, h.iv, rs, evps, evpsr)
-			pvalue := ChiSquareTest(fmt.Sprintf("ChiSquare%s_%d_%d.txt", h.crypto, bitLength, i+1), h.crypto, h.key, h.iv, rs, evps, evpsr)
-			missingProfile := cryptoprofile.UpdateEigenProfiles(h.crypto, bitLength, h.key, h.iv, rs, evps, evpsr)
-			cryptoprofile.UpdatePValue(h.crypto, bitLength, pvalue, missingProfile)
+			if h.onlyStream {
+				h.StoreStream(fmt.Sprintf("Stream%s_%d.txt", h.crypto, i+1), rs)
+			} else {
+				evpsr := cryptoprofile.GetEigenProfiles(bitLength, rs)
+				cryptoprofile.PrintEigenProfiles(fmt.Sprintf("Profile%s_%d_%d.txt", h.crypto, bitLength, i+1), h.crypto, h.key, h.iv, rs, evps, evpsr)
+				pvalue := ChiSquareTest(fmt.Sprintf("ChiSquare%s_%d_%d.txt", h.crypto, bitLength, i+1), h.crypto, h.key, h.iv, rs, evps, evpsr)
+				missingProfile := cryptoprofile.UpdateEigenProfiles(h.crypto, bitLength, h.key, h.iv, rs, evps, evpsr)
+				cryptoprofile.UpdatePValue(h.crypto, bitLength, pvalue, missingProfile)
+			}
 		}
 		fmt.Printf("---------------------------------------\n\n")
 	}
