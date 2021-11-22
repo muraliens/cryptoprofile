@@ -17,7 +17,11 @@ func (h *Handle) ZucStream() cryptoprofile.BitStream {
 		rand.Read(h.iv)
 	}
 
-	z := zuc.NewZUC(h.key, h.iv)
+	if h.numRounds <= 0 || h.numRounds > 256 {
+		h.numRounds = 256
+	}
+
+	z := zuc.NewZUC(h.key, h.iv, h.numRounds)
 
 	numberStream := h.streamLength / 32
 

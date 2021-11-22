@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,7 @@ type Handle struct {
 	numSamples   int
 	numRounds    int
 	onlyStream   bool
+	binaryFormat bool
 }
 
 func main() {
@@ -45,6 +47,7 @@ func main() {
 	flag.StringVar(&ivBytes, "ivBytes", "", "IV byte stream")
 	flag.IntVar(&h.numRounds, "numRounds", 0, "Number of Crypto Init Rounds")
 	flag.BoolVar(&h.onlyStream, "onlyStream", false, "Generate only stream")
+	flag.BoolVar(&h.binaryFormat, "binaryFormat", false, "Stream output format")
 
 	flag.Parse()
 
@@ -171,7 +174,11 @@ func main() {
 				return
 			}
 			if h.onlyStream {
-				h.StoreStream(fmt.Sprintf("Stream%s_%d.txt", h.crypto, i+1), rs)
+				fileName := fmt.Sprintf("Stream%s.txt", h.crypto)
+				if i == 0 {
+					os.Remove(fileName)
+				}
+				h.StoreStream(fileName, rs)
 			} else {
 				evpsr := cryptoprofile.GetEigenProfiles(bitLength, rs)
 				cryptoprofile.PrintEigenProfiles(fmt.Sprintf("Profile%s_%d_%d.txt", h.crypto, bitLength, i+1), h.crypto, h.key, h.iv, rs, evps, evpsr)

@@ -23,7 +23,11 @@ func (h *Handle) TriviumStream() cryptoprofile.BitStream {
 	copy(key[:], h.key)
 	copy(iv[:], h.iv)
 
-	t := trivium.NewTrivium(key, iv)
+	if h.numRounds <= 0 || h.numRounds > 1152 {
+		h.numRounds = 1152
+	}
+
+	t := trivium.NewTrivium(key, iv, h.numRounds)
 
 	numberStream := h.streamLength / 8
 
