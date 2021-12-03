@@ -12,7 +12,7 @@ func TestVocabulary(t *testing.T) {
 		Profiles: make([]EigenProfileType, 0),
 	}
 
-	bitLength := 19
+	bitLength := 4
 	totalValue := int(math.Pow(2, float64(bitLength)))
 	fmt.Printf("")
 	for i := 0; i < totalValue; i++ {

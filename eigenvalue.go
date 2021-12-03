@@ -157,9 +157,12 @@ func isTupleExist(bss []BitStream, tup string) bool {
 }
 
 func (bs BitStream) Vocabulary() []BitStream {
-	voc := make([]BitStream, 0)
+	fvoc := make([]BitStream, 0)
 	for i := 0; i < bs.Length; i++ {
 		j := 0
+		count := 0
+		voc := make([]BitStream, 0)
+		reqCount := int(math.Pow(2, float64(i+1)))
 		for {
 			sub := bs.Value[j : j+i+1]
 			if len(voc) == 0 || !isTupleExist(voc, sub) {
@@ -168,14 +171,19 @@ func (bs BitStream) Vocabulary() []BitStream {
 					Length: len(sub),
 				}
 				voc = append(voc, tup)
+				count++
+			}
+			if count == reqCount {
+				break
 			}
 			j++
 			if j+i == bs.Length {
 				break
 			}
 		}
+		fvoc = append(fvoc, voc...)
 	}
-	return voc
+	return fvoc
 }
 
 func (bs BitStream) Prefix() BitStream {
@@ -221,6 +229,36 @@ func (bs BitStream) EigenProfile() EigenProfile {
 		evp = append(evp, byte(ev))
 	}
 	return EigenProfile(evp)
+}
+
+func (bs BitStream) EigenProfileWitJump() ([]int, []int) {
+
+	var evp []int
+	//evp := make([]EigenValue, 0)
+	bss := bs.AllPrefixes()
+	js := make([]int, 0)
+	js = append(js, 0)
+	evp = append(evp, 0)
+	for _, pbs := range bss {
+		var cjs int
+		if len(js) == 0 {
+			cjs = 0
+		} else {
+			cjs = js[len(js)-1]
+		}
+		ev := pbs.EigenVaule()
+		if len(evp) != 0 {
+			if evp[len(evp)-1] != int(ev) {
+				js = append(js, cjs+1)
+			} else {
+				js = append(js, cjs)
+			}
+		} else {
+			js = append(js, cjs)
+		}
+		evp = append(evp, int(ev))
+	}
+	return evp, js
 }
 
 func IsEigenProfileMatch(ev1 EigenProfile, ev2 EigenProfile) bool {
